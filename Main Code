@@ -1,0 +1,194 @@
+package Basics;
+
+import java.util.*;
+import java.util.List;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+
+class Task implements Serializable, Comparable<Task> {
+    String title, description, status;
+    Date dueDate;
+
+    public Task(String title, String description, String dueDateStr) throws ParseException {
+        this.title = title;
+        this.description = description;
+        this.status = "Pending"; // Default status
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+        this.dueDate = sdf.parse(dueDateStr);
+    }
+
+    @Override
+    public String toString() {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+        return title + " - " + sdf.format(dueDate) + " (" + status + ")";
+    }
+
+    @Override
+    public int compareTo(Task other) {
+        return this.dueDate.compareTo(other.dueDate); // Sort by due date
+    }
+}
+
+public class TaskSchedulerGUI {
+    private JFrame frame;
+    private PriorityQueue<Task> tasks;
+
+    public TaskSchedulerGUI() {
+        tasks = new PriorityQueue<>();
+        loadTasks();
+
+        frame = new JFrame("Task Scheduler");
+        frame.setSize(600, 400);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setLayout(new BorderLayout());
+        frame.getContentPane().setBackground(new Color(255, 245, 210)); // Soft yellow background
+
+        // Add Buttons Panel
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        buttonPanel.setBackground(new Color(63, 81, 181)); // Indigo background
+
+        JButton addTaskButton = createButton("Add Task");
+        JButton listTasksButton = createButton("List of Tasks");
+        JButton updateTaskButton = createButton("Update Task Status");
+
+        buttonPanel.add(addTaskButton);
+        buttonPanel.add(listTasksButton);
+        buttonPanel.add(updateTaskButton);
+        frame.add(buttonPanel, BorderLayout.NORTH);
+
+        // Add Task Button Action
+        addTaskButton.addActionListener(e -> addTask());
+
+        // List Tasks Button Action
+        listTasksButton.addActionListener(e -> showTaskList());
+
+        // Update Task Status Button Action
+        updateTaskButton.addActionListener(e -> updateTaskStatusDialog());
+
+        frame.setVisible(true);
+    }
+
+    private JButton createButton(String text) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Arial", Font.BOLD, 14));
+        button.setBackground(new Color(255, 87, 34)); // Deep orange background
+        button.setForeground(Color.WHITE);
+        button.setBorder(BorderFactory.createLineBorder(Color.WHITE));
+        button.setPreferredSize(new Dimension(150, 40));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(new Color(33, 150, 243)); // Lighter blue on hover
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(new Color(255, 87, 34)); // Back to original color
+            }
+        });
+
+        return button;
+    }
+
+    private void addTask() {
+        JTextField titleField = new JTextField();
+        JTextField descriptionField = new JTextField();
+        JTextField dueDateField = new JTextField();
+
+        Object[] inputFields = {
+            "Task Title:", titleField,
+            "Description:", descriptionField,
+            "Due Date (dd/MM/yyyy HH:mm):", dueDateField
+        };
+
+        int option = JOptionPane.showConfirmDialog(frame, inputFields, "Add Task", JOptionPane.OK_CANCEL_OPTION);
+        if (option == JOptionPane.OK_OPTION) {
+            String title = titleField.getText().trim();
+            String description = descriptionField.getText().trim();
+            String dueDate = dueDateField.getText().trim();
+
+            if (title.isEmpty() || description.isEmpty() || dueDate.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Please fill all fields.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            try {
+                Task newTask = new Task(title, description, dueDate);
+                tasks.add(newTask);
+                saveTasks();
+                JOptionPane.showMessageDialog(frame, "Task added successfully!");
+            } catch (ParseException e) {
+                JOptionPane.showMessageDialog(frame, "Invalid date format. Use dd/MM/yyyy HH:mm.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private void showTaskList() {
+        DefaultListModel<Task> taskListModel = new DefaultListModel<>();
+        for (Task task : tasks) {
+            taskListModel.addElement(task);
+        }
+
+        JList<Task> taskList = new JList<>(taskListModel);
+        taskList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        JScrollPane scrollPane = new JScrollPane(taskList);
+        JOptionPane.showMessageDialog(frame, scrollPane, "List of Tasks", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void updateTaskStatusDialog() {
+        DefaultListModel<Task> taskListModel = new DefaultListModel<>();
+        for (Task task : tasks) {
+            taskListModel.addElement(task);
+        }
+
+        JList<Task> taskList = new JList<>(taskListModel);
+        taskList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        JScrollPane scrollPane = new JScrollPane(taskList);
+        int option = JOptionPane.showConfirmDialog(frame, scrollPane, "Select a Task to Update Status", 
+                JOptionPane.OK_CANCEL_OPTION);
+
+        if (option == JOptionPane.OK_OPTION && taskList.getSelectedValue() != null) {
+            Task selectedTask = taskList.getSelectedValue();
+            String[] possibleStatuses = {"Pending", "In Progress", "Completed"};
+            String newStatus = (String) JOptionPane.showInputDialog(frame, 
+                "Choose new status for the task:", "Update Task Status", 
+                JOptionPane.QUESTION_MESSAGE, null, possibleStatuses, selectedTask.status);
+
+            if (newStatus != null) {
+                selectedTask.status = newStatus;
+                saveTasks();
+                JOptionPane.showMessageDialog(frame, "Task status updated!");
+            }
+        }
+    }
+
+    private void saveTasks() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("tasks.dat"))) {
+            oos.writeObject(new ArrayList<>(tasks));
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(frame, "Error saving tasks.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void loadTasks() {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("tasks.dat"))) {
+            List<Task> taskList = (List<Task>) ois.readObject();
+            tasks = new PriorityQueue<>(taskList);
+        } catch (IOException | ClassNotFoundException e) {
+            tasks = new PriorityQueue<>();
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(TaskSchedulerGUI::new);
+    }
+}
